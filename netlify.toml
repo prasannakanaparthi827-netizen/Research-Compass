@@ -1,6 +1,7 @@
 [build]
-  publish = "nca-research-compass/public"
-  functions = "nca-research-compass/netlify/functions"
+  base = "nca-research-compass"
+  publish = "public"
+  functions = "netlify/functions"
 
 [[redirects]]
   from = "/api/*"
