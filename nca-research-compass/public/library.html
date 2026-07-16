@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Problem Statement Library — NCA Research Compass</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div class="nav" id="nav"></div>
+
+<div class="page-head">
+  <div>
+    <h1 style="font-size:28px;">Problem Statement Library</h1>
+    <p>Browse by specialty, or <a href="/new-project.html">bring your own problem statement</a> instead.</p>
+  </div>
+</div>
+
+<div class="filter-bar" id="filterBar"></div>
+<div class="ps-list" id="psList"></div>
+
+<script src="/js/app.js"></script>
+<script>
+renderNav();
+
+let allStatements = [];
+let activeCategory = "All";
+
+async function load() {
+  const list = document.getElementById("psList");
+  try {
+    const data = await api("/problem-statements");
+    allStatements = data.statements;
+    const categories = ["All", ...new Set(allStatements.map((s) => s.category))];
+    document.getElementById("filterBar").innerHTML = categories.map((c) =>
+      `<div class="chip ${c === activeCategory ? 'active' : ''}" data-cat="${escapeHtml(c)}">${escapeHtml(c)}</div>`
+    ).join("");
+    document.querySelectorAll(".chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        activeCategory = chip.dataset.cat;
+        document.querySelectorAll(".chip").forEach((c) => c.classList.remove("active"));
+        chip.classList.add("active");
+        render();
+      });
+    });
+    render();
+  } catch (err) {
+    list.innerHTML = `<div class="empty-state">${escapeHtml(err.message)}</div>`;
+  }
+}
+
+function render() {
+  const list = document.getElementById("psList");
+  const filtered = activeCategory === "All" ? allStatements : allStatements.filter((s) => s.category === activeCategory);
+  list.innerHTML = filtered.map((s) => `
+    <div class="ps-card">
+      <div>
+        <div class="meta">${escapeHtml(s.category)}</div>
+        <h4>${escapeHtml(s.title)}</h4>
+        <p>${escapeHtml(s.statement)}</p>
+      </div>
+      <button class="btn btn-gold" data-id="${s.id}" data-title="${escapeHtml(s.title)}" data-statement="${escapeHtml(s.statement)}">Use this</button>
+    </div>
+  `).join("");
+
+  list.querySelectorAll("button[data-id]").forEach((btn) => {
+    btn.addEventListener("click", () => useStatement(btn));
+  });
+}
+
+async function useStatement(btn) {
+  if (!Auth.getToken()) {
+    window.location.href = "/auth.html?tab=signup";
+    return;
+  }
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>';
+  try {
+    const data = await api("/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: btn.dataset.title,
+        problem_statement: btn.dataset.statement,
+        source: "library",
+      }),
+    });
+    window.location.href = "/project.html?id=" + data.project.id;
+  } catch (err) {
+    alert(err.message);
+    btn.disabled = false;
+    btn.textContent = "Use this";
+  }
+}
+
+load();
+</script>
+</body>
+</html>

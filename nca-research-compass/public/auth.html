@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Log in or Sign up — NCA Research Compass</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div class="nav" id="nav"></div>
+
+<div class="auth-wrap">
+  <div class="auth-card">
+    <div class="auth-tabs">
+      <div class="auth-tab" id="tabLogin">Log in</div>
+      <div class="auth-tab" id="tabSignup">Sign up</div>
+    </div>
+
+    <div id="errorBox"></div>
+
+    <form id="loginForm">
+      <div class="field">
+        <label for="loginEmail">Email</label>
+        <input type="email" id="loginEmail" required autocomplete="email">
+      </div>
+      <div class="field">
+        <label for="loginPassword">Password</label>
+        <input type="password" id="loginPassword" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn btn-primary btn-full" id="loginBtn">Log in</button>
+    </form>
+
+    <form id="signupForm" style="display:none;">
+      <div class="field">
+        <label for="signupName">Full name</label>
+        <input type="text" id="signupName" required autocomplete="name">
+      </div>
+      <div class="field">
+        <label for="signupEmail">Email</label>
+        <input type="email" id="signupEmail" required autocomplete="email">
+      </div>
+      <div class="field">
+        <label for="signupCollege">College (optional)</label>
+        <input type="text" id="signupCollege" autocomplete="organization">
+      </div>
+      <div class="field">
+        <label for="signupPassword">Password</label>
+        <input type="password" id="signupPassword" required minlength="6" autocomplete="new-password">
+      </div>
+      <button type="submit" class="btn btn-primary btn-full" id="signupBtn">Create account</button>
+    </form>
+
+    <p class="hint">By continuing you agree this tool assists your research — always confirm methodology choices with your guide.</p>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+renderNav();
+
+const tabLogin = document.getElementById("tabLogin");
+const tabSignup = document.getElementById("tabSignup");
+const loginForm = document.getElementById("loginForm");
+const signupForm = document.getElementById("signupForm");
+const errorBox = document.getElementById("errorBox");
+
+function showTab(tab) {
+  errorBox.innerHTML = "";
+  if (tab === "signup") {
+    tabSignup.classList.add("active");
+    tabLogin.classList.remove("active");
+    signupForm.style.display = "block";
+    loginForm.style.display = "none";
+  } else {
+    tabLogin.classList.add("active");
+    tabSignup.classList.remove("active");
+    loginForm.style.display = "block";
+    signupForm.style.display = "none";
+  }
+}
+
+tabLogin.addEventListener("click", () => showTab("login"));
+tabSignup.addEventListener("click", () => showTab("signup"));
+
+const params = new URLSearchParams(window.location.search);
+showTab(params.get("tab") === "signup" ? "signup" : "login");
+
+function showError(msg) {
+  errorBox.innerHTML = `<div class="error-msg">${escapeHtml(msg)}</div>`;
+}
+
+loginForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById("loginBtn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Logging in...';
+  try {
+    const data = await api("/auth-login", {
+      method: "POST",
+      body: JSON.stringify({
+        email: document.getElementById("loginEmail").value,
+        password: document.getElementById("loginPassword").value,
+      }),
+    });
+    Auth.setSession(data.token, data.user);
+    window.location.href = "/dashboard.html";
+  } catch (err) {
+    showError(err.message);
+    btn.disabled = false;
+    btn.textContent = "Log in";
+  }
+});
+
+signupForm.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById("signupBtn");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Creating account...';
+  try {
+    const data = await api("/auth-signup", {
+      method: "POST",
+      body: JSON.stringify({
+        name: document.getElementById("signupName").value,
+        email: document.getElementById("signupEmail").value,
+        college: document.getElementById("signupCollege").value,
+        password: document.getElementById("signupPassword").value,
+      }),
+    });
+    Auth.setSession(data.token, data.user);
+    window.location.href = "/dashboard.html";
+  } catch (err) {
+    showError(err.message);
+    btn.disabled = false;
+    btn.textContent = "Create account";
+  }
+});
+</script>
+</body>
+</html>

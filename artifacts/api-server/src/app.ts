@@ -1,3 +1,4 @@
+import path from "path";
 import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
@@ -28,6 +29,14 @@ app.use(
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Serve the NCA Research Compass static HTML/CSS/JS frontend.
+// process.cwd() is artifacts/api-server/ when run via pnpm, so resolve up two levels.
+app.use(
+  express.static(
+    path.resolve(process.cwd(), "../../nca-research-compass/public"),
+  ),
+);
 
 app.use("/api", router);
 

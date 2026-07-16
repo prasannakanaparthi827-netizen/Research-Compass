@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Research — NCA Research Compass</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div class="nav" id="nav"></div>
+
+<div class="page-head">
+  <div>
+    <h1 style="font-size:28px;">My Research</h1>
+    <p>Every project you've started, saved to your account.</p>
+  </div>
+  <a href="/new-project.html" class="btn btn-primary">+ New research project</a>
+</div>
+
+<div id="projectGrid" class="project-grid"></div>
+
+<script src="/js/app.js"></script>
+<script>
+if (Auth.requireLogin()) {
+  renderNav();
+  load();
+}
+
+async function load() {
+  const grid = document.getElementById("projectGrid");
+  try {
+    const data = await api("/projects");
+    if (!data.projects.length) {
+      grid.innerHTML = `
+        <div class="empty-state" style="grid-column:1/-1;">
+          <p style="margin-bottom:16px;">You haven't started a research project yet.</p>
+          <a href="/new-project.html" class="btn btn-primary">Start your first project</a>
+        </div>`;
+      return;
+    }
+    grid.innerHTML = data.projects.map((p) => {
+      const dots = STAGES.map((s) => `<div class="dot ${s.number <= p.current_stage - (p.status === 'completed' ? 0 : 1) ? 'filled' : ''}"></div>`).join("");
+      return `
+        <a class="project-card" href="/project.html?id=${p.id}">
+          <span class="status ${p.status === 'completed' ? 'completed' : ''}">${p.status === 'completed' ? '✓ Completed' : 'Stage ' + p.current_stage + ' of ' + STAGES.length}</span>
+          <h3>${escapeHtml(p.title)}</h3>
+          <p class="ps">${escapeHtml(p.problem_statement)}</p>
+          <div class="mini-trace">${dots}</div>
+        </a>`;
+    }).join("");
+  } catch (err) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">${escapeHtml(err.message)}</div>`;
+  }
+}
+</script>
+</body>
+</html>

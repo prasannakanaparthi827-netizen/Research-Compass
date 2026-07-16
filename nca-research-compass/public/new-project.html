@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>New Research Project — NCA Research Compass</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div class="nav" id="nav"></div>
+
+<div class="auth-wrap" style="max-width:560px;">
+  <div class="auth-card">
+    <h2 style="font-size:22px; margin-bottom:6px;">Bring your own problem statement</h2>
+    <p style="color:var(--ink-soft); font-size:14px; margin-bottom:24px;">Paste the problem statement your teacher gave you, or write your own. You can also <a href="/library.html">pick one from the library</a> instead.</p>
+
+    <div id="errorBox"></div>
+
+    <form id="newForm">
+      <div class="field">
+        <label for="title">Project title (optional)</label>
+        <input type="text" id="title" placeholder="e.g. Fall risk among elderly inpatients">
+      </div>
+      <div class="field">
+        <label for="statement">Problem statement</label>
+        <textarea id="statement" required placeholder="A study to assess..."></textarea>
+      </div>
+      <button type="submit" class="btn btn-primary btn-full" id="submitBtn">Start this research project</button>
+    </form>
+  </div>
+</div>
+
+<script src="/js/app.js"></script>
+<script>
+if (Auth.requireLogin()) renderNav();
+
+document.getElementById("newForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById("submitBtn");
+  const errorBox = document.getElementById("errorBox");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Creating...';
+  try {
+    const data = await api("/projects", {
+      method: "POST",
+      body: JSON.stringify({
+        title: document.getElementById("title").value,
+        problem_statement: document.getElementById("statement").value,
+        source: "custom",
+      }),
+    });
+    window.location.href = "/project.html?id=" + data.project.id;
+  } catch (err) {
+    errorBox.innerHTML = `<div class="error-msg">${escapeHtml(err.message)}</div>`;
+    btn.disabled = false;
+    btn.textContent = "Start this research project";
+  }
+});
+</script>
+</body>
+</html>

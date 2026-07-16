@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Research Project — NCA Research Compass</title>
+<link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+
+<div class="nav" id="nav"></div>
+
+<div class="wizard" id="wizard" style="display:none;">
+  <div class="stage-nav" id="stageNav"></div>
+  <div class="stage-content" id="stageContent"></div>
+</div>
+
+<div id="loadingState" class="container" style="padding:64px 24px; text-align:center; color:var(--ink-soft);">Loading your project…</div>
+
+<script src="/js/app.js"></script>
+<script>
+if (Auth.requireLogin()) renderNav();
+
+const params = new URLSearchParams(window.location.search);
+const projectId = params.get("id");
+let project = null;
+let stages = null;
+let activeStageNumber = 1;
+
+async function load() {
+  if (!projectId) {
+    window.location.href = "/dashboard.html";
+    return;
+  }
+  try {
+    const data = await api("/project?id=" + projectId);
+    project = data.project;
+    stages = data.stages;
+    activeStageNumber = Math.min(project.current_stage, STAGES.length);
+    document.getElementById("loadingState").style.display = "none";
+    document.getElementById("wizard").style.display = "grid";
+    renderStageNav();
+    renderStageContent();
+  } catch (err) {
+    document.getElementById("loadingState").textContent = err.message;
+  }
+}
+
+function renderStageNav() {
+  const nav = document.getElementById("stageNav");
+  nav.innerHTML = STAGES.map((s) => {
+    const stageData = stages.find((st) => st.number === s.number);
+    const done = stageData && stageData.content;
+    const locked = s.number > project.current_stage && !done;
+    let cls = "stage-nav-item";
+    if (s.number === activeStageNumber) cls += " active";
+    if (done) cls += " done";
+    if (locked) cls += " locked";
+    return `<div class="${cls}" data-n="${s.number}">
+      <span class="n">${done ? "✓" : s.number}</span>
+      <span>${s.title}</span>
+    </div>`;
+  }).join("");
+
+  nav.querySelectorAll(".stage-nav-item").forEach((el) => {
+    el.addEventListener("click", () => {
+      const n = parseInt(el.dataset.n, 10);
+      const stageData = stages.find((st) => st.number === n);
+      const done = stageData && stageData.content;
+      if (n > project.current_stage && !done) return;
+      activeStageNumber = n;
+      renderStageNav();
+      renderStageContent();
+    });
+  });
+}
+
+function renderStageContent() {
+  const content = document.getElementById("stageContent");
+  const stage = STAGES.find((s) => s.number === activeStageNumber);
+  const stageData = stages.find((st) => st.number === activeStageNumber);
+  const hasContent = stageData && stageData.content;
+
+  let body = "";
+  if (activeStageNumber === 1) {
+    body = `
+      <div class="generated-note">
+        <textarea readonly>${escapeHtml(project.problem_statement)}</textarea>
+      </div>
+      <p class="save-hint">This is the problem statement your project is built on.</p>
+    `;
+  } else if (hasContent) {
+    body = `
+      <div class="generated-note">
+        <textarea id="stageText">${escapeHtml(stageData.content)}</textarea>
+      </div>
+      <div class="stage-actions">
+        <button class="btn btn-primary" id="saveBtn">Save changes</button>
+        <button class="btn btn-outline" id="regenBtn">Regenerate</button>
+        ${activeStageNumber < STAGES.length ? `<button class="btn btn-ghost" id="nextBtn">Next stage →</button>` : ""}
+        <span class="save-hint" id="saveHint"></span>
+      </div>
+    `;
+  } else {
+    body = `
+      <div class="card" style="text-align:center; padding:48px 24px;">
+        <p style="color:var(--ink-soft); margin-bottom:20px;">Generate a draft for this stage based on your problem statement. You'll be able to edit every word.</p>
+        <button class="btn btn-gold" id="generateBtn">Generate this section</button>
+      </div>
+    `;
+  }
+
+  content.innerHTML = `
+    <span class="stage-count mono">STAGE ${stage.number} OF ${STAGES.length}</span>
+    <h2>${stage.title}</h2>
+    <div class="ps-banner"><strong>Problem statement:</strong> ${escapeHtml(project.problem_statement)}</div>
+    ${body}
+  `;
+
+  const generateBtn = document.getElementById("generateBtn");
+  if (generateBtn) generateBtn.addEventListener("click", () => generate(activeStageNumber, generateBtn));
+
+  const regenBtn = document.getElementById("regenBtn");
+  if (regenBtn) regenBtn.addEventListener("click", () => generate(activeStageNumber, regenBtn));
+
+  const saveBtn = document.getElementById("saveBtn");
+  if (saveBtn) saveBtn.addEventListener("click", saveCurrentStage);
+
+  const nextBtn = document.getElementById("nextBtn");
+  if (nextBtn) nextBtn.addEventListener("click", () => {
+    activeStageNumber += 1;
+    renderStageNav();
+    renderStageContent();
+  });
+}
+
+async function generate(stageNumber, btn) {
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Generating...';
+  try {
+    const data = await api("/generate-stage", {
+      method: "POST",
+      body: JSON.stringify({ project_id: projectId, stage_number: stageNumber }),
+    });
+    let stageData = stages.find((st) => st.number === stageNumber);
+    if (!stageData) {
+      stageData = { number: stageNumber, content: data.content, generated: true };
+      stages.push(stageData);
+    } else {
+      stageData.content = data.content;
+      stageData.generated = true;
+    }
+    if (project.current_stage < stageNumber + 1) {
+      project.current_stage = Math.min(stageNumber + 1, STAGES.length);
+    }
+    renderStageNav();
+    renderStageContent();
+  } catch (err) {
+    alert(err.message);
+    btn.disabled = false;
+    btn.textContent = original;
+  }
+}
+
+async function saveCurrentStage() {
+  const btn = document.getElementById("saveBtn");
+  const hint = document.getElementById("saveHint");
+  const text = document.getElementById("stageText").value;
+  btn.disabled = true;
+  try {
+    await api("/save-stage", {
+      method: "POST",
+      body: JSON.stringify({ project_id: projectId, stage_number: activeStageNumber, content: text }),
+    });
+    const stageData = stages.find((st) => st.number === activeStageNumber);
+    if (stageData) stageData.content = text;
+    hint.textContent = "Saved.";
+    setTimeout(() => (hint.textContent = ""), 2000);
+  } catch (err) {
+    hint.textContent = err.message;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+load();
+</script>
+</body>
+</html>
