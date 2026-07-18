@@ -1,6 +1,11 @@
 const bcrypt = require("bcryptjs");
-const { getDatabase } = require("@netlify/database");
+const { createClient } = require("@supabase/supabase-js");
 const { signToken } = require("./_auth");
+
+const supabase = createClient(
+  process.env.SUPABASE_DATABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
 
 exports.handler = async (event) => {
   if (event.httpMethod !== "POST") {
@@ -23,9 +28,17 @@ exports.handler = async (event) => {
       };
     }
 
-    const db = getDatabase();
-    const existing = await db.sql`SELECT id FROM users WHERE email = ${email.toLowerCase()}`;
-    if (existing.length > 0) {
+    const normalizedEmail = email.toLowerCase();
+
+    const { data: existing, error: lookupError } = await supabase
+      .from("users")
+      .select("id")
+      .eq("email", normalizedEmail)
+      .maybeSingle();
+
+    if (lookupError) throw lookupError;
+
+    if (existing) {
       return {
         statusCode: 409,
         body: JSON.stringify({ error: "An account with this email already exists." }),
@@ -33,11 +46,19 @@ exports.handler = async (event) => {
     }
 
     const hash = await bcrypt.hash(password, 10);
-    const [user] = await db.sql`
-      INSERT INTO users (name, email, password_hash, college)
-      VALUES (${name}, ${email.toLowerCase()}, ${hash}, ${college || null})
-      RETURNING id, name, email
-    `;
+
+    const { data: user, error: insertError } = await supabase
+      .from("users")
+      .insert({
+        name,
+        email: normalizedEmail,
+        password_hash: hash,
+        college: college || null,
+      })
+      .select("id, name, email")
+      .single();
+
+    if (insertError) throw insertError;
 
     const token = signToken(user);
     return {
