@@ -17,11 +17,11 @@ exports.handler = async (event) => {
     return { statusCode: 401, body: JSON.stringify({ error: "Please log in." }) };
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
+  if (!process.env.GEMINI_API_KEY) {
     return {
       statusCode: 500,
       body: JSON.stringify({
-        error: "AI generation isn't configured yet. Add an ANTHROPIC_API_KEY environment variable in the Netlify site settings.",
+        error: "AI generation isn't configured yet. Add a GEMINI_API_KEY environment variable in the Netlify site settings.",
       }),
     };
   }
@@ -47,32 +47,36 @@ exports.handler = async (event) => {
 
     const prompt = PROMPTS[stage.key](project.problem_statement);
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "x-api-key": process.env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-5",
-        max_tokens: 1500,
-        messages: [{ role: "user", content: prompt }],
-      }),
-    });
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+        }),
+      }
+    );
 
     if (!response.ok) {
       const errText = await response.text();
-      console.error("Anthropic API error:", errText);
+      console.error("Gemini API error:", errText);
       return { statusCode: 502, body: JSON.stringify({ error: "The AI mentor is unavailable right now. Please try again." }) };
     }
 
     const data = await response.json();
-    const text = (data.content || [])
-      .filter((b) => b.type === "text")
-      .map((b) => b.text)
-      .join("\n\n")
-      .trim();
+    const text = (
+      (data.candidates &&
+        data.candidates[0] &&
+        data.candidates[0].content &&
+        data.candidates[0].content.parts &&
+        data.candidates[0].content.parts.map((p) => p.text).join("\n\n")) ||
+      ""
+    ).trim();
+
+    if (!text) {
+      return { statusCode: 502, body: JSON.stringify({ error: "The AI mentor didn't return content. Please try again." }) };
+    }
 
     const { error: upsertError } = await supabase
       .from("project_stages")
