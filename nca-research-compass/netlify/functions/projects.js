@@ -43,6 +43,7 @@ exports.handler = async (event) => {
           title: projectTitle,
           problem_statement: problem_statement.trim(),
           source: source || "custom",
+          current_stage: 2,
         })
         .select("id, title, problem_statement, source, current_stage, status, updated_at")
         .single();
