@@ -42,13 +42,32 @@ async function load() {
     grid.innerHTML = data.projects.map((p) => {
       const dots = STAGES.map((s) => `<div class="dot ${s.number <= p.current_stage - (p.status === 'completed' ? 0 : 1) ? 'filled' : ''}"></div>`).join("");
       return `
-        <a class="project-card" href="/project.html?id=${p.id}">
-          <span class="status ${p.status === 'completed' ? 'completed' : ''}">${p.status === 'completed' ? '✓ Completed' : 'Stage ' + p.current_stage + ' of ' + STAGES.length}</span>
-          <h3>${escapeHtml(p.title)}</h3>
-          <p class="ps">${escapeHtml(p.problem_statement)}</p>
-          <div class="mini-trace">${dots}</div>
-        </a>`;
+        <div class="project-card" style="position:relative; display:block;">
+          <button class="icon-btn" data-delete-id="${p.id}" title="Delete project"
+            style="position:absolute; top:14px; right:14px; z-index:2; color:var(--rose); border-color:var(--line);">✕</button>
+          <a href="/project.html?id=${p.id}" style="text-decoration:none; color:inherit; display:block;">
+            <span class="status ${p.status === 'completed' ? 'completed' : ''}">${p.status === 'completed' ? '✓ Completed' : 'Stage ' + p.current_stage + ' of ' + STAGES.length}</span>
+            <h3 style="padding-right:28px;">${escapeHtml(p.title)}</h3>
+            <p class="ps">${escapeHtml(p.problem_statement)}</p>
+            <div class="mini-trace">${dots}</div>
+          </a>
+        </div>`;
     }).join("");
+
+    grid.querySelectorAll("[data-delete-id]").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const id = btn.dataset.deleteId;
+        if (!confirm("Delete this project permanently? This cannot be undone.")) return;
+        try {
+          await api("/project?id=" + id, { method: "DELETE" });
+          load();
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+    });
   } catch (err) {
     grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1;">${escapeHtml(err.message)}</div>`;
   }
