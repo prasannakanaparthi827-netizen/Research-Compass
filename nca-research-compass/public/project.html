@@ -10,6 +10,14 @@
 
 <div class="nav" id="nav"></div>
 
+<div class="container" id="projectHeader" style="display:none; padding-top:28px; display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+  <h2 id="projectTitle" style="margin:0; font-size:20px;"></h2>
+  <div style="display:flex; gap:10px;">
+    <button class="btn btn-outline" id="exportBtn">⬇ Export Proposal</button>
+    <button class="btn btn-ghost" id="deleteProjectBtn" style="color:var(--rose);">Delete project</button>
+  </div>
+</div>
+
 <div class="wizard" id="wizard" style="display:none;">
   <div class="stage-nav" id="stageNav"></div>
   <div class="stage-content" id="stageContent"></div>
@@ -66,6 +74,8 @@ async function load() {
     activeStageNumber = Math.min(project.current_stage, STAGES.length);
     document.getElementById("loadingState").style.display = "none";
     document.getElementById("wizard").style.display = "grid";
+    document.getElementById("projectHeader").style.display = "flex";
+    document.getElementById("projectTitle").textContent = project.title;
     renderStageNav();
     renderStageContent();
   } catch (err) {
@@ -159,7 +169,10 @@ function renderStageContent() {
   if (generateBtn) generateBtn.addEventListener("click", () => generate(activeStageNumber, generateBtn));
 
   const regenBtn = document.getElementById("regenBtn");
-  if (regenBtn) regenBtn.addEventListener("click", () => generate(activeStageNumber, regenBtn));
+  if (regenBtn) regenBtn.addEventListener("click", () => {
+    if (hasContent && !confirm("Regenerate this section? Your current text (including any edits) will be replaced.")) return;
+    generate(activeStageNumber, regenBtn);
+  });
 
   const saveBtn = document.getElementById("saveBtn");
   if (saveBtn) saveBtn.addEventListener("click", saveCurrentStage);
@@ -242,6 +255,53 @@ async function saveCurrentStage() {
     btn.disabled = false;
   }
 }
+
+function exportProposal() {
+  const sectionsHtml = STAGES.map((s) => {
+    const sd = stages.find((st) => st.number === s.number);
+    const bodyHtml = sd && sd.content
+      ? renderMarkdown(sd.content)
+      : "<p><em>(Not yet generated)</em></p>";
+    return `<h2>${s.number}. ${escapeHtml(s.title)}</h2>${bodyHtml}`;
+  }).join("");
+
+  const docHtml = `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>${escapeHtml(project.title)}</title>
+    <style>
+      body { font-family: Calibri, Arial, sans-serif; font-size: 12pt; line-height: 1.5; color: #111; }
+      h1 { font-size: 18pt; margin-bottom: 4px; }
+      h2 { font-size: 14pt; color: #0E4749; margin-top: 24px; }
+      h3 { font-size: 12.5pt; color: #1C7373; }
+      .ps { background: #F6ECD6; padding: 10px 14px; border-radius: 4px; margin-bottom: 20px; }
+    </style>
+  </head><body>
+    <h1>${escapeHtml(project.title)}</h1>
+    <div class="ps"><strong>Problem Statement:</strong> ${escapeHtml(project.problem_statement)}</div>
+    ${sectionsHtml}
+  </body></html>`;
+
+  const blob = new Blob(["\ufeff", docHtml], { type: "application/msword" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = (project.title || "research-proposal").replace(/[^a-z0-9]+/gi, "-").toLowerCase() + ".doc";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById("exportBtn").addEventListener("click", exportProposal);
+
+document.getElementById("deleteProjectBtn").addEventListener("click", async () => {
+  if (!confirm("Delete this project permanently? This cannot be undone.")) return;
+  try {
+    await api("/project?id=" + projectId, { method: "DELETE" });
+    window.location.href = "/dashboard.html";
+  } catch (err) {
+    alert(err.message);
+  }
+});
 
 load();
 </script>
