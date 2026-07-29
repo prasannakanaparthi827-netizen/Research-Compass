@@ -256,35 +256,60 @@ async function saveCurrentStage() {
   }
 }
 
+function escapeRtf(str) {
+  return (str || "")
+    .replace(/\\/g, "\\\\")
+    .replace(/{/g, "\\{")
+    .replace(/}/g, "\\}")
+    .replace(/[^\x00-\x7F]/g, (c) => "\\u" + c.charCodeAt(0) + "?");
+}
+
+function inlineRtf(text) {
+  return escapeRtf(text).replace(/\*\*(.+?)\*\*/g, "{\\b $1}");
+}
+
+function markdownToRtf(md) {
+  const lines = (md || "").split("\n");
+  let rtf = "";
+  lines.forEach((raw) => {
+    const l = raw.trim();
+    if (!l) { rtf += "\\par "; return; }
+    if (/^###\s+/.test(l)) {
+      rtf += "\\par{\\b\\fs26 " + escapeRtf(l.replace(/^###\s+/, "")) + "}\\par ";
+    } else if (/^##\s+/.test(l)) {
+      rtf += "\\par{\\b\\fs28 " + escapeRtf(l.replace(/^##\s+/, "")) + "}\\par ";
+    } else if (/^---$/.test(l)) {
+      rtf += "\\par \\brdrb\\brdrs\\brdrw10\\brsp20\\par ";
+    } else if (/^[-*]\s+/.test(l)) {
+      rtf += "\\par \\bullet\\tab " + inlineRtf(l.replace(/^[-*]\s+/, "")) + " ";
+    } else if (/^\d+\.\s+/.test(l)) {
+      const num = l.match(/^\d+\./)[0];
+      rtf += "\\par " + num + "\\tab " + inlineRtf(l.replace(/^\d+\.\s+/, "")) + " ";
+    } else {
+      rtf += inlineRtf(l) + " ";
+    }
+  });
+  return rtf;
+}
+
 function exportProposal() {
-  const sectionsHtml = STAGES.map((s) => {
+  let body = "{\\b\\fs32 " + escapeRtf(project.title) + "}\\par\\par";
+  body += "{\\b Problem Statement: }" + inlineRtf(project.problem_statement) + "\\par\\par";
+
+  STAGES.forEach((s) => {
     const sd = stages.find((st) => st.number === s.number);
-    const bodyHtml = sd && sd.content
-      ? renderMarkdown(sd.content)
-      : "<p><em>(Not yet generated)</em></p>";
-    return `<h2>${s.number}. ${escapeHtml(s.title)}</h2>${bodyHtml}`;
-  }).join("");
+    body += "\\par{\\b\\fs30 " + s.number + ". " + escapeRtf(s.title) + "}\\par";
+    body += sd && sd.content ? markdownToRtf(sd.content) : "{\\i (Not yet generated)}";
+    body += "\\par";
+  });
 
-  const docHtml = `<!DOCTYPE html><html><head><meta charset="utf-8">
-    <title>${escapeHtml(project.title)}</title>
-    <style>
-      body { font-family: Calibri, Arial, sans-serif; font-size: 12pt; line-height: 1.5; color: #111; }
-      h1 { font-size: 18pt; margin-bottom: 4px; }
-      h2 { font-size: 14pt; color: #0E4749; margin-top: 24px; }
-      h3 { font-size: 12.5pt; color: #1C7373; }
-      .ps { background: #F6ECD6; padding: 10px 14px; border-radius: 4px; margin-bottom: 20px; }
-    </style>
-  </head><body>
-    <h1>${escapeHtml(project.title)}</h1>
-    <div class="ps"><strong>Problem Statement:</strong> ${escapeHtml(project.problem_statement)}</div>
-    ${sectionsHtml}
-  </body></html>`;
+  const rtf = "{\\rtf1\\ansi\\deff0{\\fonttbl{\\f0 Calibri;}}\\f0\\fs22 " + body + "}";
 
-  const blob = new Blob(["\ufeff", docHtml], { type: "application/msword" });
+  const blob = new Blob([rtf], { type: "application/rtf" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = (project.title || "research-proposal").replace(/[^a-z0-9]+/gi, "-").toLowerCase() + ".doc";
+  a.download = (project.title || "research-proposal").replace(/[^a-z0-9]+/gi, "-").toLowerCase() + ".rtf";
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
